@@ -1,5 +1,5 @@
 const clientId = 'd5c3f91a3a994aa18c2479a15f6f9a5b';
-const redirectUri = 'https://zzayyna.github.io/spotifysoundtrack.github.io/';
+const redirectUri = 'https://zzayyna.github.io/spotifysoundtrack.github.io';
 const scopes = 'user-top-read'; 
 
 document.getElementById('button').addEventListener('click', () => {

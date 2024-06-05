@@ -23,7 +23,6 @@ function getAccessToken(code) {
             'code': code,
             'redirect_uri': redirectUri,
             'client_id': clientId,
-            'client_secret': '816aae964c1a4960b06b874dc0ba7a5b',
         })
     };
 

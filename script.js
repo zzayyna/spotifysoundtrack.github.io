@@ -62,7 +62,7 @@ function getTopTracks(accessToken){
                 gotAction = true;
             }
 
-            if (!gotRomance && (genres.includes('new romantic') || genres.includes('bedroom pop') || genres.includes('pop') || genres.includes('indie'))) {
+            if (!gotRomance && (genres.includes('new romantic') || genres.includes('bedroom pop') || genres.includes('pop') || genres.includes('indie') || genres.includes('indie pop'))) {
                 romanceDiv.innerHTML = `<p>${track.name}</p><p>${artist.name}</p><p>${genres.join(', ')}</p>`;
                 gotRomance = true;
             }

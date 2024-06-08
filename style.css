@@ -1,25 +1,30 @@
 body{
     text-align: center;
     font-family: Arial, Helvetica, sans-serif;
-    background-color: #FCF7F3;
+    background: rgb(2,62,2);
+    background: linear-gradient(90deg, rgba(2,62,2,1) 0%, rgba(44,203,153,1) 35%, rgba(7,51,133,1) 100%);
+    color: white;
 }
 
 h1{
     letter-spacing: 12px;
-    font-weight: lighter;
+    font-weight: bold;
+    font-size: 50px;
 }
 
 button{
     text-decoration: none;
+    color: white;
     padding: 5px;
     border-radius: 10px;
-    border: 1px solid;
-    background-color: #FCF7F3;
+    border: 1px solid white;
+    background-color:  rgba(44,203,153,1);
     transition: ease 0.5s;
+    margin: 5px;
 }
 
 button:hover{
     transform: scale(1.2);
-    background-color: #e8d6c7;
+    background-color: #4076b7;
     cursor:pointer;
 }

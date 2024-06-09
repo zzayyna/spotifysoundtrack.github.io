@@ -121,8 +121,9 @@ function processTracks(tracks, accessToken) {
         genres.forEach(genre => {
             const track = getGenreTrack(tracks, audioFeatures, genre);
             const div = document.getElementById(genre);
+            const imageUrl = track.album.images[0].url;
             if (track) {
-                div.innerHTML = `<p>${track.name}</p><p>${track.artists.map(artist => artist.name).join(', ')}</p>`;
+                div.innerHTML = `<img src="${imageUrl}" alt="${track.name}" style="width: 150px; height: 150px;"><p>${track.name}</p><p>${track.artists.map(artist => artist.name).join(', ')}</p>`;
             } else {
                 div.innerHTML = `<p>No suitable track found for ${genre}.</p>`;
             }

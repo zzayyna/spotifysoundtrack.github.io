@@ -1,6 +1,7 @@
-const clientId = 'd5c3f91a3a994aa18c2479a15f6f9a5b';
+const clientId = '241de437d0514ac1aa204e5435652b01'; 
+const clientSecret = '1e84c1fd7e56403c82df49752132ed9a'; 
 const redirectUri = 'https://zzayyna.github.io/spotifysoundtrack.github.io/';
-const scopes = 'user-top-read user-library-read'; 
+const scopes = 'user-top-read user-library-read';
 
 document.getElementById('button').addEventListener('click', () => {
     const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
@@ -30,7 +31,7 @@ function getAccessToken(code) {
             'code': code,
             'redirect_uri': redirectUri,
             'client_id': clientId,
-            'client_secret': '816aae964c1a4960b06b874dc0ba7a5b',
+            'client_secret': clientSecret,
         })
     };
 
@@ -64,8 +65,8 @@ function getTopTracks(accessToken) {
     });
 }
 
-function getAllTracks(accessToken, url = 'https://api.spotify.com/v1/me/tracks') {
-    return fetch(url, {
+function getAllTracks(accessToken, url = 'https://api.spotify.com/v1/me/tracks', allTracks = []) {
+    fetch(url, {
         headers: {
             Authorization: `Bearer ${accessToken}`,
         },
@@ -77,8 +78,15 @@ function getAllTracks(accessToken, url = 'https://api.spotify.com/v1/me/tracks')
         return response.json();
     })
     .then(data => {
-        const tracks = data.items.map(item => item.track); // Get the actual tracks
-        processTracks(tracks, accessToken);
+        const newTracks = data.items.map(item => item.track);
+        allTracks = allTracks.concat(newTracks);
+        if (data.next) {
+            // If there is a next page, fetch it
+            getAllTracks(accessToken, data.next, allTracks);
+        } else {
+            // No more pages, process the collected tracks
+            processTracks(allTracks, accessToken);
+        }
     })
     .catch(error => {
         console.error('Error fetching saved tracks:', error);
@@ -86,9 +94,32 @@ function getAllTracks(accessToken, url = 'https://api.spotify.com/v1/me/tracks')
 }
 
 function processTracks(tracks, accessToken) {
-    const genres = ["action", "romance", "indie", "horror", "fantasy", "drama"];
-    genres.forEach(genre => {
-        getGenreTrack(tracks, accessToken, genre).then(track => {
+    console.log(`Processing ${tracks.length} tracks`);
+
+    // Break tracks into batches of 100 for fetching audio features
+    const batches = [];
+    for (let i = 0; i < tracks.length; i += 100) {
+        batches.push(tracks.slice(i, i + 100));
+    }
+
+    const promises = batches.map(batch => {
+        const trackIds = batch.map(track => track.id).join(',');
+        return fetchWithRetry(`https://api.spotify.com/v1/audio-features?ids=${trackIds}`, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        })
+        .then(response => response.json())
+        .then(data => data.audio_features);
+    });
+
+    Promise.all(promises)
+    .then(results => {
+        const audioFeatures = results.flat();
+        console.log('Audio features:', audioFeatures);
+        const genres = ["action", "romance", "indie", "horror", "fantasy", "drama"];
+        genres.forEach(genre => {
+            const track = getGenreTrack(tracks, audioFeatures, genre);
             const div = document.getElementById(genre);
             if (track) {
                 div.innerHTML = `<p>${track.name}</p><p>${track.artists.map(artist => artist.name).join(', ')}</p>`;
@@ -96,66 +127,72 @@ function processTracks(tracks, accessToken) {
                 div.innerHTML = `<p>No suitable track found for ${genre}.</p>`;
             }
         });
+    })
+    .catch(error => {
+        console.error('Error fetching audio features:', error);
     });
 }
 
-async function getGenreTrack(tracks, accessToken, genre) {
+function getGenreTrack(tracks, audioFeatures, genre) {
     let selectedTrack = null;
     let maxScore = -Infinity;
 
     const genreCriteria = {
-        action: { energy: [0.6, 1.0], tempo: [120, 180], danceability: [0.6, 1.0] },
+        action: { energy: [0.6, 1.0], tempo: [120, 200], danceability: [0.6, 1.0] },
         romance: { tempo: [60, 120], acousticness: [0.4, 1.0], valence: [0.4, 1.0], energy: [0.2, 0.6] },
         indie: { instrumentalness: [0.3, 1.0], acousticness: [0.4, 1.0], energy: [0.2, 0.7], tempo: [80, 140] },
-        horror: { valence: [0.0, 0.3], instrumentalness: [0.5, 1.0], tempo: [60, 120], speechiness: [0.3, 1.0] },
-        fantasy: { energy: [0.4, 0.8], tempo: [60, 120], acousticness: [0.6, 1.0], instrumentalness: [0.5, 1.0] },
-        drama: { tempo: [60, 120], acousticness: [0.4, 1.0], energy: [0.3, 0.7], valence: [0.4, 0.8] }
+        horror: { valence: [0.0, 0.4], instrumentalness: [0.3, 1.0], tempo: [0, 110], acousticness: [0.4, 1.0]},
+        fantasy: { valence: [0.5, 1.0], tempo: [100, 160], energy: [0.4, 0.8], instrumentalness: [0.0, 0.3] },
+        drama: { tempo: [60, 130], acousticness: [0.4, 0.9], energy: [0.0, 0.5], valence: [0.0, 0.5] }
     };
 
     const criteria = genreCriteria[genre];
 
-    const promises = tracks.map(track => {
-        const trackId = track.id;
-        return fetch(`https://api.spotify.com/v1/audio-features/${trackId}`, {
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-            },
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Failed to fetch track audio features.');
+    audioFeatures.forEach((feature, index) => {
+        let score = 0;
+        let isWithinRange = true;
+        for (const key in criteria) {
+            const [min, max] = criteria[key];
+            const value = feature[key] || 0;
+            if (value < min || value > max) {
+                isWithinRange = false;
+                break;
             }
-            return response.json();
-        })
-        .then(data => {
-            let score = 0;
-            let isWithinRange = true;
-            for (const feature in criteria) {
-                const [min, max] = criteria[feature];
-                const value = data[feature] || 0;
-                if (value < min || value > max) {
-                    isWithinRange = false;
-                    break;
-                }
-                score += value; // Summing up the values for scoring
-            }
+            score += value; // Summing up the values for scoring
+        }
 
-            if (isWithinRange && score > maxScore) {
-                selectedTrack = track;
-                maxScore = score;
-            }
-        })
-        .catch(error => {
-            console.error(`Error fetching track audio features for track ${trackId}:`, error);
-        });
+        if (isWithinRange && score > maxScore) {
+            selectedTrack = tracks[index];
+            maxScore = score;
+        }
     });
-
-    await Promise.all(promises);
 
     return selectedTrack;
 }
 
-// execution
+function fetchWithRetry(url, options, maxRetries = 3, delay = 1000) {
+    return new Promise((resolve, reject) => {
+        const doFetch = (retryCount) => {
+            fetch(url, options)
+                .then(response => {
+                    if (response.ok) {
+                        resolve(response);
+                    } else if (response.status === 429 && retryCount < maxRetries) {
+                        setTimeout(() => doFetch(retryCount + 1), delay * Math.pow(2, retryCount));
+                    } else {
+                        reject(new Error(`Failed to fetch data. Status: ${response.status}`));
+                    }
+                })
+                .catch(error => {
+                    reject(error);
+                });
+        };
+
+        doFetch(0);
+    });
+}
+
+// Execution
 document.addEventListener('DOMContentLoaded', () => {
     const code = getCodeFromUrl();
     if (code) {

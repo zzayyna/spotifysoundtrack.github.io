@@ -1,8 +1,8 @@
 body{
     text-align: center;
     font-family: Arial, Helvetica, sans-serif;
-    background: rgb(2,62,2);
-    background: linear-gradient(90deg, rgba(2,62,2,1) 0%, rgba(44,203,153,1) 35%, rgba(7,51,133,1) 100%);
+    background: rgb(3,6,52);
+    background: linear-gradient(90deg, rgba(3,6,52,1) 0%, rgba(24,104,139,1) 50%, rgba(5,28,71,1) 100%);
     color: white;
 }
 
@@ -18,7 +18,7 @@ button{
     padding: 5px;
     border-radius: 10px;
     border: 1px solid white;
-    background-color:  rgba(44,203,153,1);
+    background-color:  #09203d;
     transition: ease 0.5s;
     margin: 5px;
 }
@@ -28,3 +28,37 @@ button:hover{
     background-color: #4076b7;
     cursor:pointer;
 }
+
+.action, .romance, .indie, .horror, .fantasy, .drama{
+    background: rgb(7,11,69);
+    background: linear-gradient(90deg, rgba(7,11,69,1) 0%, rgba(35,122,161,1) 50%, rgba(15,42,93,1) 100%);
+    width: 60%;
+    border-radius: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px;
+    margin: auto;
+    margin-top: 20px;
+
+}
+
+/* .action h4{
+    font-size: 50px;
+    text-align: left;
+    margin: 30px;
+}
+
+#action img{
+    transform: rotate(5deg);
+}
+
+#action p{
+    margin: 3px;
+    font-size: 20px;
+} */
+
+iframe{
+    opacity: 100%;
+}
+

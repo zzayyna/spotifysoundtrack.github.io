@@ -1,6 +1,6 @@
 const clientId = '241de437d0514ac1aa204e5435652b01'; 
 const clientSecret = '1e84c1fd7e56403c82df49752132ed9a'; 
-const redirectUri = 'https://zzayyna.github.io/spotifysoundtrack.github.io/';
+const redirectUri = 'https://zzayyna.github.io/spotifysoundtrack.github.io';
 const scopes = 'user-top-read user-library-read';
 
 document.getElementById('button').addEventListener('click', () => {
@@ -14,6 +14,12 @@ document.getElementById('all').addEventListener('click', () => {
     localStorage.setItem('type', 'all');
     window.location.href = authUrl;
 });
+
+document.getElementById('year').addEventListener('click', () => {
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}`;
+    localStorage.setItem('type', 'year');
+    window.location.href = authUrl;
+})
 
 function getCodeFromUrl() {
     const searchParams = new URLSearchParams(window.location.search);
@@ -44,8 +50,9 @@ function getAccessToken(code) {
         });
 }
 
+// top 50 in last month
 function getTopTracks(accessToken) {
-    fetch('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=50', {
+    fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=50`, {
         headers: {
             Authorization: `Bearer ${accessToken}`,
         },
@@ -62,6 +69,28 @@ function getTopTracks(accessToken) {
     })
     .catch(error => {
         console.error('Error fetching top tracks:', error);
+    });
+}
+
+// top 50 in last year
+function getYrTopTracks(accessToken){
+    fetch(`https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=50`, {
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+        },
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Failed to fetch top tracks from last year.');
+        }
+        return response.json();
+    })
+    .then(data => {
+        const tracks = data.items;
+        processTracks(tracks, accessToken);
+    })
+    .catch(error => {
+        console.error('Error fetching top tracks from last year.');
     });
 }
 
@@ -121,9 +150,14 @@ function processTracks(tracks, accessToken) {
         genres.forEach(genre => {
             const track = getGenreTrack(tracks, audioFeatures, genre);
             const div = document.getElementById(genre);
-            const imageUrl = track.album.images[0].url;
             if (track) {
-                div.innerHTML = `<img src="${imageUrl}" alt="${track.name}" style="width: 150px; height: 150px;"><p>${track.name}</p><p>${track.artists.map(artist => artist.name).join(', ')}</p>`;
+                const imageUrl = track.album?.images[0]?.url || 'placeholder.jpg';
+                const previewUrl = track.preview_url;
+                div.innerHTML = `
+                    <img src="${imageUrl}" alt="${track.name}" style="width: 150px; height: 150px;">
+                    <p>${track.name}</p>
+                    <p>${track.artists.map(artist => artist.name).join(', ')}</p>
+                `;
             } else {
                 div.innerHTML = `<p>No suitable track found for ${genre}.</p>`;
             }
@@ -137,12 +171,14 @@ function processTracks(tracks, accessToken) {
 function getGenreTrack(tracks, audioFeatures, genre) {
     let selectedTrack = null;
     let maxScore = -Infinity;
+    let fallbackTrack = null;
+    let fallbackScore = Infinity;
 
     const genreCriteria = {
         action: { energy: [0.6, 1.0], tempo: [120, 200], danceability: [0.6, 1.0] },
         romance: { tempo: [60, 120], acousticness: [0.4, 1.0], valence: [0.4, 1.0], energy: [0.2, 0.6] },
         indie: { instrumentalness: [0.3, 1.0], acousticness: [0.4, 1.0], energy: [0.2, 0.7], tempo: [80, 140] },
-        horror: { valence: [0.0, 0.4], instrumentalness: [0.3, 1.0], tempo: [0, 110], acousticness: [0.4, 1.0]},
+        horror: { valence: [0.0, 0.4], instrumentalness: [0.3, 1.0], tempo: [0, 110], acousticness: [0.4, 1.0] },
         fantasy: { valence: [0.5, 1.0], tempo: [100, 160], energy: [0.4, 0.8], instrumentalness: [0.0, 0.3] },
         drama: { tempo: [60, 130], acousticness: [0.4, 0.9], energy: [0.0, 0.5], valence: [0.0, 0.5] }
     };
@@ -150,14 +186,16 @@ function getGenreTrack(tracks, audioFeatures, genre) {
     const criteria = genreCriteria[genre];
 
     audioFeatures.forEach((feature, index) => {
+        if (!feature) return; // Check for null audio features
         let score = 0;
         let isWithinRange = true;
+        let distance = 0;
         for (const key in criteria) {
             const [min, max] = criteria[key];
             const value = feature[key] || 0;
             if (value < min || value > max) {
                 isWithinRange = false;
-                break;
+                distance += Math.min(Math.abs(value - min), Math.abs(value - max));
             }
             score += value; // Summing up the values for scoring
         }
@@ -165,48 +203,39 @@ function getGenreTrack(tracks, audioFeatures, genre) {
         if (isWithinRange && score > maxScore) {
             selectedTrack = tracks[index];
             maxScore = score;
+        } else if (!isWithinRange && distance < fallbackScore) {
+            fallbackTrack = tracks[index];
+            fallbackScore = distance;
         }
     });
 
-    return selectedTrack;
+    return selectedTrack || fallbackTrack;
 }
 
-function fetchWithRetry(url, options, maxRetries = 3, delay = 1000) {
-    return new Promise((resolve, reject) => {
-        const doFetch = (retryCount) => {
-            fetch(url, options)
-                .then(response => {
-                    if (response.ok) {
-                        resolve(response);
-                    } else if (response.status === 429 && retryCount < maxRetries) {
-                        setTimeout(() => doFetch(retryCount + 1), delay * Math.pow(2, retryCount));
-                    } else {
-                        reject(new Error(`Failed to fetch data. Status: ${response.status}`));
-                    }
-                })
-                .catch(error => {
-                    reject(error);
-                });
-        };
-
-        doFetch(0);
+function fetchWithRetry(url, options, retries = 3, delay = 1000) {
+    return fetch(url, options).then(response => {
+        if (!response.ok && retries > 0) {
+            return new Promise(resolve => setTimeout(resolve, delay))
+                .then(() => fetchWithRetry(url, options, retries - 1, delay));
+        }
+        return response;
     });
 }
 
-// Execution
-document.addEventListener('DOMContentLoaded', () => {
+window.onload = function() {
     const code = getCodeFromUrl();
     if (code) {
-        getAccessToken(code)
-            .then(accessToken => {
+        getAccessToken(code).then(accessToken => {
+            if (accessToken) {
                 const type = localStorage.getItem('type');
-                if (accessToken && type === 'top') {
+                if (type === 'top') {
                     getTopTracks(accessToken);
-                } else if (accessToken && type === 'all') {
-                    getAllTracks(accessToken);
+                } else if (type === 'year') {
+                    getYrTopTracks(accessToken);
                 } else {
-                    console.error('Failed to get access token or invalid type.');
+                    getAllTracks(accessToken);
                 }
-            });
+            }
+        });
     }
-});
+};
